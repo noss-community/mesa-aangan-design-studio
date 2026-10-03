@@ -136,7 +136,10 @@ reflected immediately (see below).
 
 ## Dashboard
 
-`/dashboard` — two panels, recomputed on every page load:
+`/dashboard` has two tabs, both recomputed on every page load (`force-dynamic` + a manual Refresh
+button — "live" here means "always current on the next load/refresh," not a push/websocket feed).
+
+### Overview — two panels
 
 **Performance** (last 30 days, configurable via `?periodDays=`): median time-to-first-response, %
 answered under 60s, overnight call count (7pm–10am IST), qualified ÷ total rate.
@@ -149,6 +152,20 @@ automation's headline result versus a 2-person front desk, not a bug in the meas
 
 **Economics** (current calendar month): AI cost per call, total AI spend, consultations booked,
 estimated pipeline (booked × avg. project value), ROI multiple. Also at `GET /api/dashboard/metrics`.
+
+### Calls — per-call log
+
+`/dashboard/calls` — every call, newest first (most recent 200; see `lib/calls.ts` if that cap ever
+needs to grow), with date/time, caller, project type + location (from Vaani's own data-extraction —
+see `lib/vaaniAgent.ts`'s `updateAnalysisConfig`), duration, AI cost, status, the scheduled slot (or
+why there isn't one), and a one-line summary. Click a row for the full detail page: per-criterion
+qualification breakdown, the handoff note, booking/CRM links, and the complete transcript.
+
+One correctness detail worth knowing if you ever touch `lib/callFlow.ts` or `lib/calls.ts`: Vaani's
+transcript string embeds a real "HH:MM:SS" clock time per line (`lib/transcript.ts` parses it into
+each turn's `at` field) — that's what the detail page's transcript timestamps come from
+(`call_turns.at_label`), not `created_at`, which is just whenever our bulk insert happened to run
+and would make every turn in a call look like it occurred at the same instant.
 
 ### Live-editable rates (no redeploy)
 
@@ -227,7 +244,10 @@ chat history beyond what the user themselves provided.
 app/
   api/webhook/vaani/route.ts      webhook entry point (auth + dispatch only)
   api/dashboard/metrics/route.ts  JSON metrics endpoint
-  dashboard/page.tsx              the dashboard
+  dashboard/layout.tsx            shared header + Overview/Calls nav
+  dashboard/page.tsx              Overview tab (Performance + Economics panels)
+  dashboard/calls/page.tsx        Calls tab (per-call table)
+  dashboard/calls/[id]/page.tsx   single call's full detail + transcript
 lib/
   callFlow.ts                     call_started / call_postprocessing / lifecycle-event handlers
   gemini.ts                       post-call analysis (qualification + escalation + summary)
@@ -237,11 +257,11 @@ lib/
   transcript.ts                   parses Vaani's "[HH:MM:SS] ROLE: text" transcript string
   calcom.ts, hubspot.ts           integration clients
   handoff.ts                      handoff note assembly + persistence
-  metrics.ts, rates.ts            dashboard math + live rate resolution
+  metrics.ts, calls.ts, rates.ts  dashboard + per-call-table queries, live rate resolution
   workingHours.ts, format.ts, types.ts, db.ts
 db/schema.sql, db/migrate.mjs     Postgres schema + one-shot migration runner
 scripts/
   setup-vaani-agent.ts            create/sync the Vaani agent from lib/rubric.ts (npm run vaani:sync)
   simulate-call.mjs               local end-to-end test harness against the real APIs
-components/dashboard/             panel + metric-card UI
+components/dashboard/             panel, metric-card, calls-table, status-badge, nav UI
 ```

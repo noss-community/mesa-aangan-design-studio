@@ -90,14 +90,16 @@ export async function handleCallPostprocessing(data: VaaniCallPostprocessingData
   for (let i = 0; i < transcript.length; i++) {
     const turn = transcript[i];
     await sql`
-      insert into call_turns (call_id, turn_index, role, text)
-      values (${call.id}, ${i}, ${turn.role}, ${turn.text})
+      insert into call_turns (call_id, turn_index, role, text, at_label)
+      values (${call.id}, ${i}, ${turn.role}, ${turn.text}, ${turn.at || null})
     `;
   }
 
   const { result, usage } = await analyzeCompletedCall({ transcript });
 
   const callerName = call.caller_name ?? data.entities?.caller_name ?? null;
+  const projectLocation = call.project_location ?? data.entities?.project_location ?? null;
+  const projectType = call.project_type ?? data.entities?.project_type ?? null;
   const schedulingPreference = data.entities?.scheduling_preference ?? null;
 
   let status: CallRow["status"] = result.escalation.triggered
@@ -168,6 +170,8 @@ export async function handleCallPostprocessing(data: VaaniCallPostprocessingData
   await sql`
     update calls set
       caller_name = ${callerName},
+      project_location = ${projectLocation},
+      project_type = ${projectType},
       call_ended_at = now(),
       vaani_duration_seconds = ${durationSeconds},
       qualification = ${JSON.stringify(result.qualification)}::jsonb,

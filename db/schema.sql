@@ -8,6 +8,9 @@ create table if not exists calls (
   vaani_call_id          text unique not null,
   caller_phone           text,
   caller_name            text,
+  -- From Vaani's own data-extraction config (lib/vaaniAgent.ts) — captured on call_postprocessing.
+  project_location       text,
+  project_type           text,
 
   call_started_at        timestamptz not null default now(),
   call_ended_at          timestamptz,
@@ -45,6 +48,11 @@ create table if not exists calls (
   updated_at             timestamptz not null default now()
 );
 
+-- Idempotent column additions for databases created before project_location/project_type existed
+-- (the CREATE TABLE above only applies to a brand-new database).
+alter table calls add column if not exists project_location text;
+alter table calls add column if not exists project_type text;
+
 create index if not exists idx_calls_call_started_at on calls (call_started_at);
 create index if not exists idx_calls_status on calls (status);
 
@@ -54,11 +62,16 @@ create table if not exists call_turns (
   turn_index               integer not null,
   role                     text not null check (role in ('caller', 'agent')),
   text                     text not null,
+  -- Vaani's own "HH:MM:SS" label from its transcript string — the actual in-call time, distinct
+  -- from created_at below (which is just when we happened to insert the row, in a tight loop).
+  at_label                 text,
   gemini_prompt_tokens     integer,
   gemini_completion_tokens integer,
   gemini_total_tokens      integer,
   created_at               timestamptz not null default now()
 );
+
+alter table call_turns add column if not exists at_label text;
 
 create index if not exists idx_call_turns_call_id on call_turns (call_id);
 

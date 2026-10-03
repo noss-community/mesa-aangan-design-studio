@@ -34,6 +34,8 @@ export interface CallRow {
   vaani_call_id: string;
   caller_phone: string | null;
   caller_name: string | null;
+  project_location: string | null;
+  project_type: string | null;
   call_started_at: string;
   call_ended_at: string | null;
   first_response_at: string | null;
