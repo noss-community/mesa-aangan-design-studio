@@ -19,15 +19,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let payload: VaaniWebhookEnvelope;
+  // Parse leniently: Vaani's dashboard "Test Connectivity" button (and possibly other platform
+  // pings) may send a body that isn't valid JSON, or valid JSON with no `event` field at all.
+  // Rejecting those with 4xx only makes the integration look broken in Vaani's UI — the only
+  // thing that should ever fail here is a bad/missing auth secret, already handled above.
+  let payload: Partial<VaaniWebhookEnvelope> = {};
   try {
     payload = (await req.json()) as VaaniWebhookEnvelope;
   } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+    console.log("Vaani webhook: non-JSON body received (likely a connectivity test) — acking 200.");
+    return NextResponse.json({ ok: true });
   }
 
-  if (!payload || typeof payload !== "object" || !("event" in payload)) {
-    return NextResponse.json({ error: "payload must include `event`" }, { status: 400 });
+  if (!payload || typeof payload !== "object" || !payload.event) {
+    console.log("Vaani webhook: payload with no `event` field received (likely a connectivity test) — acking 200.", payload);
+    return NextResponse.json({ ok: true });
   }
 
   try {
@@ -41,15 +47,16 @@ export async function POST(req: NextRequest) {
 
       case "call_postprocessing":
         if (!payload.data) {
-          return NextResponse.json({ error: "call_postprocessing payload missing `data`" }, { status: 400 });
+          console.error("call_postprocessing payload missing `data`:", payload);
+          break;
         }
         await handleCallPostprocessing(payload.data);
         break;
 
       default:
-        // call_ringing, user_picked_up_at, call_rejected, call_no_answer, call_failed,
+        // call_ringing, user_picked_up_at, call_rejected, call_no_answer, call_failed, call_ended,
         // human_transfer_* — all fire-and-forget notifications, logged and acked.
-        await handleLifecycleEvent(payload);
+        await handleLifecycleEvent(payload as VaaniWebhookEnvelope);
     }
   } catch (err) {
     console.error(`Vaani webhook error (event=${payload.event}):`, err);
